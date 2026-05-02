@@ -1,159 +1,551 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NO3 Field Calculator</title>
-
-<style>
-body { font-family:sans-serif; padding:15px; background:#f5f5f5;}
-.card { background:white; padding:15px; margin-bottom:12px; border-radius:10px;}
-input { width:100%; padding:8px; margin:4px 0;}
-button { width:100%; padding:12px; background:#2563eb; color:white; border:none; border-radius:8px;}
-.result { font-size:28px; font-weight:bold;}
-.bad {color:red;}
-.warn {color:orange;}
-.good {color:green;}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NO3 Field Calculator</title>
+  <style>
+    :root {
+      --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280;
+      --accent:#2563eb; --ok:#047857; --warn:#b45309; --bad:#b91c1c;
+      --border:#e5e7eb; --soft:#f3f4f6;
+    }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width:760px; margin:0 auto; padding:16px; }
+    h1 { font-size:24px; margin:8px 0 4px; }
+    .subtitle { color:var(--muted); font-size:14px; line-height:1.5; margin-bottom:14px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:14px; box-shadow:0 1px 5px rgba(0,0,0,.04); }
+    h2 { font-size:17px; margin:0 0 10px; }
+    label { display:block; font-size:13px; color:var(--muted); margin:9px 0 5px; }
+    input, select { width:100%; box-sizing:border-box; font-size:18px; padding:12px; border-radius:12px; border:1px solid var(--border); background:white; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .cal-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:end; margin-bottom:8px; }
+    button { width:100%; font-size:17px; font-weight:700; padding:13px; border:0; border-radius:14px; background:var(--accent); color:white; margin:6px 0 10px; }
+    button.secondary { background:#374151; }
+    button.light { background:#e5e7eb; color:#111827; }
+    .result { font-size:34px; font-weight:800; margin:6px 0 4px; }
+    .subresult { font-size:18px; font-weight:700; margin:0 0 10px; color:#374151; }
+    .small { font-size:14px; color:var(--muted); line-height:1.6; }
+    .badge { display:inline-block; padding:6px 10px; border-radius:999px; font-size:14px; font-weight:800; margin:4px 4px 8px 0; }
+    .ok { background:#ecfdf5; color:var(--ok); }
+    .caution { background:#fffbeb; color:var(--warn); }
+    .bad { background:#fef2f2; color:var(--bad); }
+    .message { border-radius:12px; padding:10px 12px; margin:10px 0; font-size:14px; line-height:1.55; }
+    .msg-ok { background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; }
+    .msg-caution { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+    .msg-bad { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+    details { background:#f9fafb; border:1px solid var(--border); border-radius:12px; padding:10px 12px; margin-top:10px; }
+    summary { font-weight:700; cursor:pointer; }
+    table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+    th,td { border-bottom:1px solid var(--border); padding:8px 4px; text-align:right; }
+    th:first-child,td:first-child { text-align:left; }
+    .row-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .row-actions3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+    .row-actions button, .row-actions3 button { font-size:14px; padding:10px; margin:0; }
+    canvas { width:100%; height:260px; border:1px solid var(--border); border-radius:12px; background:white; margin-top:10px; }
+  </style>
 </head>
-
 <body>
+<div class="wrap">
+  <h1>NO₃⁻ Field Calculator</h1>
+  <div class="subtitle">
+    森林・河川の市民科学調査向け。2点以上の校正からNO₃⁻濃度を推定します。
+    R²・残差・グラフは研究開発・機器管理用です。
+  </div>
 
-<h2>NO₃⁻ Field Calculator</h2>
+  <div class="card">
+    <h2>サンプル</h2>
+    <div class="grid2">
+      <div>
+        <label>sample mV</label>
+        <input id="sample_mv" type="number" inputmode="decimal" placeholder="例: 79" />
+      </div>
+      <div>
+        <label>sample temp °C</label>
+        <input id="sample_temp" type="number" inputmode="decimal" value="25" />
+      </div>
+    </div>
+    <label>sample ID / メモ</label>
+    <input id="sample_id" type="text" placeholder="例: sta1" />
+  </div>
 
-<div class="card">
-<label>sample mV</label>
-<input id="sample_mv" type="number">
+  <div class="card">
+    <h2>校正</h2>
+    <div class="small">
+      初期値は 0.5, 3.01, 15.06, 30.13, 60.26 mg/L。mVは2点以上入力すれば計算できます。
+      2点校正は常に「注意」扱いです。
+    </div>
 
-<label>sample temp °C</label>
-<input id="sample_temp" value="25">
+    <div id="calibration_rows"></div>
 
-<label>calibration temp °C</label>
-<input id="cal_temp" value="25">
+    <div class="grid2">
+      <div>
+        <label>calibration temp °C</label>
+        <input id="cal_temp" type="number" inputmode="decimal" value="25" />
+      </div>
+      <div>
+        <label>表示単位</label>
+        <select id="unit_mode">
+          <option value="NO3">NO₃⁻ mg/L</option>
+          <option value="NO3N">NO₃-N mg/L</option>
+        </select>
+      </div>
+    </div>
+
+    <label>
+      <input id="conditioning" type="checkbox" style="width:auto;" />
+      久しぶり使用前にコンディショニング済み
+    </label>
+
+    <div class="row-actions3" style="margin-top:10px;">
+      <button class="secondary" onclick="saveCalibration()">校正保存</button>
+      <button class="secondary" onclick="loadCalibration()">校正読込</button>
+      <button class="light" onclick="clearCalibrationInputs()">mV消去</button>
+    </div>
+    <div id="cal_save_msg" class="small"></div>
+  </div>
+
+  <button onclick="calculate()">Calculate</button>
+
+  <div class="card">
+    <h2>結果</h2>
+    <div id="confidence_badge"></div>
+    <div id="result_main" class="result">-- mg/L</div>
+    <div id="result_sub" class="subresult"></div>
+    <div id="field_message" class="message msg-ok">値を入力してCalculateを押してください。</div>
+
+    <div class="row-actions" style="margin-top:10px;">
+      <button class="secondary" onclick="getLocation()">GPS取得</button>
+      <button class="secondary" onclick="saveLog()">測定を保存</button>
+    </div>
+    <div id="gps_status" class="small">GPS: 未取得</div>
+
+    <details>
+      <summary>研究開発・機器管理用の詳細</summary>
+      <div class="small" style="margin-top:8px;">
+        ※以下のR²・残差・スロープ・グラフは研究開発・機器管理用の指標です。通常の現場利用では、上の評価メッセージを見れば十分です。
+      </div>
+      <div id="details" class="small" style="margin-top:8px;"></div>
+      <canvas id="cal_chart" width="700" height="300"></canvas>
+      <div id="residual_table" class="small"></div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>測定ログ</h2>
+    <div class="row-actions">
+      <button class="secondary" onclick="exportCSV()">CSV Export</button>
+      <button class="light" onclick="clearLogs()">ログ削除</button>
+    </div>
+    <div id="log_table" class="small"></div>
+  </div>
 </div>
-
-<div class="card">
-<h3>Calibration</h3>
 
 <script>
-const concDefault=[0.5,3.01,15.06,30.13,60.26];
+const defaultConcs = [0.5, 3.01, 15.06, 30.13, 60.26];
+let lastResult = null;
+let currentPosition = null;
+
+function initCalibrationRows() {
+  const box = document.getElementById("calibration_rows");
+  box.innerHTML = "";
+  defaultConcs.forEach((c, i) => {
+    box.innerHTML += `
+      <div class="cal-row">
+        <div>
+          <label>standard ${i+1} conc. mg/L</label>
+          <input id="c${i}" type="number" inputmode="decimal" value="${c}" />
+        </div>
+        <div>
+          <label>standard ${i+1} mV</label>
+          <input id="mv${i}" type="number" inputmode="decimal" placeholder="mV" />
+        </div>
+      </div>`;
+  });
+}
+
+function num(id) {
+  const v = parseFloat(document.getElementById(id).value);
+  return Number.isFinite(v) ? v : null;
+}
+function mean(arr){ return arr.reduce((a,b)=>a+b,0)/arr.length; }
+
+function collectCalibration() {
+  const conc = [], mv = [], originalIndex = [];
+  for (let i=0;i<5;i++) {
+    const c = num("c"+i);
+    const m = num("mv"+i);
+    if (c !== null && c > 0 && m !== null) {
+      conc.push(c);
+      mv.push(m);
+      originalIndex.push(i);
+    }
+  }
+  return {conc, mv, originalIndex};
+}
+
+function linearRegression(x, y) {
+  const n = x.length;
+
+  if (n === 2) {
+    const slope = (y[1] - y[0]) / (x[1] - x[0]);
+    const intercept = y[0] - slope * x[0];
+    return {
+      slope, intercept,
+      r2: null,
+      residuals: [0,0],
+      rmse: null
+    };
+  }
+
+  const mx = mean(x), my = mean(y);
+  let sxx=0, sxy=0, sst=0, sse=0;
+  for (let i=0;i<n;i++){
+    sxx += (x[i]-mx)*(x[i]-mx);
+    sxy += (x[i]-mx)*(y[i]-my);
+  }
+  const slope = sxy / sxx;
+  const intercept = my - slope * mx;
+  const residuals = [];
+  for (let i=0;i<n;i++){
+    const pred = slope*x[i]+intercept;
+    const res = y[i] - pred;
+    residuals.push(res);
+    sst += (y[i]-my)*(y[i]-my);
+    sse += res*res;
+  }
+  const r2 = sst === 0 ? NaN : 1 - sse/sst;
+  const rmse = Math.sqrt(sse / n);
+  return {slope, intercept, r2, residuals, rmse};
+}
+
+function calculate() {
+  const sample_mv = num("sample_mv");
+  const sample_temp = num("sample_temp");
+  const cal_temp = num("cal_temp");
+  const conditioning = document.getElementById("conditioning").checked;
+  const unitMode = document.getElementById("unit_mode").value;
+
+  if ([sample_mv, sample_temp, cal_temp].some(v => v === null)) {
+    alert("サンプルmV、温度、校正温度を入力してください。");
+    return;
+  }
+
+  const cal = collectCalibration();
+  const conc = cal.conc;
+  const mv = cal.mv;
+
+  if (conc.length < 2) {
+    alert("2点以上の校正mVを入力してください。");
+    return;
+  }
+
+  const x = conc.map(c => Math.log10(c));
+  const fit = linearRegression(x, mv);
+
+  const logC = (sample_mv - fit.intercept) / fit.slope;
+  const no3 = Math.pow(10, logC);
+  const no3n = no3 / 4.4268;
+
+  const minC = Math.min(...conc);
+  const maxC = Math.max(...conc);
+  const ideal = -59.16 * ((cal_temp + 273.15) / 298.15);
+  const slopePercent = Math.abs(fit.slope / ideal) * 100;
+  const tempDiff = Math.abs(sample_temp - cal_temp);
+  const absResiduals = fit.residuals.map(Math.abs);
+  const maxResidual = fit.residuals.length ? Math.max(...absResiduals) : 0;
+
+  let lowResidualMax = null;
+  if (conc.length >= 3) {
+    const lowPairs = conc.map((c,i)=>({c, abs: Math.abs(fit.residuals[i])}))
+                         .sort((a,b)=>a.c-b.c)
+                         .slice(0, Math.min(2, conc.length));
+    lowResidualMax = Math.max(...lowPairs.map(p=>p.abs));
+  }
+
+  let level = "Good";
+  let levelClass = "ok";
+  let message = "安定した測定状態です。現場での傾向把握に使用できます。";
+
+  const critical = [];
+  const caution = [];
+
+  if (conc.length === 2) {
+    caution.push("2点校正");
+  } else {
+    if (fit.r2 < 0.98) critical.push("校正点の直線性が低い");
+    else if (fit.r2 < 0.995) caution.push("校正点にややばらつきがある");
+
+    if (maxResidual > 6) critical.push("校正点の残差が大きい");
+    else if (maxResidual > 3) caution.push("校正点の残差がやや大きい");
+
+    if (lowResidualMax !== null && lowResidualMax > 5) caution.push("低濃度側の校正点にずれがある");
+  }
+
+  if (slopePercent < 70 || slopePercent > 130) critical.push("電極の応答が弱い、または異常");
+  else if (slopePercent < 85 || slopePercent > 115) caution.push("電極応答が理論値からやや外れている");
+
+  if (tempDiff > 5) critical.push("校正温度と測定温度の差が大きい");
+  else if (tempDiff > 2) caution.push("校正温度と測定温度に差がある");
+
+  if (!conditioning) caution.push("久しぶり使用時はコンディショニング推奨");
+  if (no3 < minC) caution.push("校正下限未満");
+  if (no3 > maxC) caution.push("校正上限超過");
+
+  if (critical.length > 0) {
+    level = "再測定推奨";
+    levelClass = "bad";
+    message = "電極の状態または校正に問題がある可能性があります。高濃度標準液で再コンディショニングし、再校正・再測定をおすすめします。";
+  } else if (caution.length > 0) {
+    level = "注意";
+    levelClass = "caution";
+    message = conc.length === 2
+      ? "2点校正に基づくため、値は参考値として扱ってください。可能であれば3点以上の校正を推奨します。"
+      : "測定値は目安として使用できますが、誤差がやや大きい可能性があります。地点間比較や傾向把握を中心に扱ってください。";
+  }
+
+  const shownMain = unitMode === "NO3" ? no3 : no3n;
+  const shownSub = unitMode === "NO3" ? `NO₃-N: ${no3n.toFixed(3)} mg/L` : `NO₃⁻: ${no3.toFixed(3)} mg/L`;
+
+  let mainText;
+  if (no3 < minC && unitMode === "NO3") mainText = `< ${minC} mg/L`;
+  else if (no3 < minC && unitMode === "NO3N") mainText = `< ${(minC/4.4268).toFixed(3)} mg/L`;
+  else mainText = shownMain.toFixed(3) + " mg/L";
+
+  document.getElementById("confidence_badge").innerHTML = `<span class="badge ${levelClass}">${level}</span>`;
+  document.getElementById("result_main").textContent = mainText;
+  document.getElementById("result_sub").textContent = shownSub;
+
+  const msg = document.getElementById("field_message");
+  msg.className = "message " + (levelClass === "ok" ? "msg-ok" : levelClass === "caution" ? "msg-caution" : "msg-bad");
+  msg.innerHTML = message + "<br><span class='small'>主な理由: " + (critical.concat(caution).join(" / ") || "特になし") + "</span>";
+
+  document.getElementById("details").innerHTML =
+    `Calibration points: ${conc.length}<br>` +
+    `Model: mV = ${fit.slope.toFixed(2)} × log10(C) + ${fit.intercept.toFixed(2)}<br>` +
+    `R²: ${fit.r2 === null ? "N/A (2点校正)" : fit.r2.toFixed(4)}<br>` +
+    `Slope: ${fit.slope.toFixed(2)} mV/decade (${slopePercent.toFixed(1)}% of ideal)<br>` +
+    `RMSE: ${fit.rmse === null ? "N/A" : fit.rmse.toFixed(2) + " mV"}<br>` +
+    `Max residual: ${conc.length === 2 ? "N/A" : maxResidual.toFixed(2) + " mV"}<br>` +
+    `Low-range max residual: ${lowResidualMax === null ? "N/A" : lowResidualMax.toFixed(2) + " mV"}<br>` +
+    `Calibration range: ${minC}–${maxC} mg/L as NO₃⁻`;
+
+  drawChart(conc, mv, fit, sample_mv, no3);
+
+  if (conc.length === 2) {
+    document.getElementById("residual_table").innerHTML =
+      `<div class="small" style="margin-top:8px;">2点校正では残差・R²は評価できません。</div>`;
+  } else {
+    const residualRows = conc.map((c, i) => {
+      const pred = fit.slope * Math.log10(c) + fit.intercept;
+      const res = fit.residuals[i];
+      return `<tr><td>${c}</td><td>${mv[i].toFixed(2)}</td><td>${pred.toFixed(2)}</td><td>${res >= 0 ? "+" : ""}${res.toFixed(2)}</td></tr>`;
+    }).join("");
+    document.getElementById("residual_table").innerHTML =
+      `<table><thead><tr><th>mg/L</th><th>obs mV</th><th>fit mV</th><th>residual</th></tr></thead><tbody>${residualRows}</tbody></table>`;
+  }
+
+  lastResult = {
+    timestamp: new Date().toISOString(),
+    sample_id: document.getElementById("sample_id").value || "",
+    sample_mv, sample_temp, cal_temp,
+    no3_mgL: no3,
+    no3n_mgL: no3n,
+    qc_level: level,
+    qc_reasons: critical.concat(caution).join(" / "),
+    calibration_points: conc.length,
+    slope: fit.slope,
+    intercept: fit.intercept,
+    r2: fit.r2,
+    rmse_mV: fit.rmse,
+    max_residual_mV: conc.length === 2 ? null : maxResidual,
+    low_range_max_residual_mV: lowResidualMax,
+    slope_percent_ideal: slopePercent,
+    lat: currentPosition ? currentPosition.lat : "",
+    lon: currentPosition ? currentPosition.lon : "",
+    gps_accuracy_m: currentPosition ? currentPosition.accuracy : ""
+  };
+}
+
+function drawChart(conc, mv, fit, sample_mv, sample_no3) {
+  const canvas = document.getElementById("cal_chart");
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+
+  if (!conc.length) return;
+
+  const xs = conc.map(c => Math.log10(c));
+  const ys = mv.slice();
+  const sampleX = Math.log10(sample_no3);
+  const sampleY = sample_mv;
+
+  const allX = xs.concat([sampleX]);
+  const allY = ys.concat([sampleY]);
+
+  const minX = Math.min(...allX) - 0.1;
+  const maxX = Math.max(...allX) + 0.1;
+  const minY = Math.min(...allY) - 8;
+  const maxY = Math.max(...allY) + 8;
+
+  const padL=55, padR=16, padT=16, padB=45;
+  const sx = x => padL + (x-minX)/(maxX-minX)*(w-padL-padR);
+  const sy = y => h-padB - (y-minY)/(maxY-minY)*(h-padT-padB);
+
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padL, padT);
+  ctx.lineTo(padL, h-padB);
+  ctx.lineTo(w-padR, h-padB);
+  ctx.stroke();
+
+  ctx.fillStyle = "#6b7280";
+  ctx.font = "13px sans-serif";
+  ctx.fillText("log10(NO₃⁻ mg/L)", w/2-55, h-12);
+  ctx.save();
+  ctx.translate(16, h/2+35);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText("mV", 0, 0);
+  ctx.restore();
+
+  const x1 = minX;
+  const x2 = maxX;
+  const y1 = fit.slope*x1 + fit.intercept;
+  const y2 = fit.slope*x2 + fit.intercept;
+  ctx.strokeStyle = "#2563eb";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(sx(x1), sy(y1));
+  ctx.lineTo(sx(x2), sy(y2));
+  ctx.stroke();
+
+  ctx.fillStyle = "#111827";
+  for (let i=0;i<xs.length;i++) {
+    ctx.beginPath();
+    ctx.arc(sx(xs[i]), sy(ys[i]), 5, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "#b91c1c";
+  ctx.beginPath();
+  ctx.arc(sx(sampleX), sy(sampleY), 6, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillText("sample", sx(sampleX)+8, sy(sampleY)-8);
+
+  ctx.fillStyle = "#6b7280";
+  ctx.fillText("● calibration   ● sample", padL, 18);
+}
+
+function getLocation() {
+  const status = document.getElementById("gps_status");
+  if (!navigator.geolocation) {
+    status.textContent = "GPS: この端末では位置情報を取得できません。";
+    return;
+  }
+  status.textContent = "GPS: 取得中...";
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      currentPosition = {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        accuracy: pos.coords.accuracy
+      };
+      status.textContent = `GPS: ${currentPosition.lat.toFixed(6)}, ${currentPosition.lon.toFixed(6)} / ±${Math.round(currentPosition.accuracy)} m`;
+      if (lastResult) {
+        lastResult.lat = currentPosition.lat;
+        lastResult.lon = currentPosition.lon;
+        lastResult.gps_accuracy_m = currentPosition.accuracy;
+      }
+    },
+    err => {
+      status.textContent = "GPS: 取得できませんでした（位置情報の許可を確認）。";
+    },
+    { enableHighAccuracy:true, timeout:10000, maximumAge:60000 }
+  );
+}
+
+function saveCalibration() {
+  const data = {
+    conc: defaultConcs.map((_,i)=>num("c"+i)),
+    mv: defaultConcs.map((_,i)=>num("mv"+i)),
+    cal_temp: num("cal_temp"),
+    conditioning: document.getElementById("conditioning").checked,
+    saved_at: new Date().toISOString()
+  };
+  localStorage.setItem("no3_saved_calibration_v1", JSON.stringify(data));
+  document.getElementById("cal_save_msg").textContent = "校正を保存しました。";
+}
+
+function loadCalibration() {
+  const raw = localStorage.getItem("no3_saved_calibration_v1");
+  if (!raw) {
+    document.getElementById("cal_save_msg").textContent = "保存された校正がありません。";
+    return;
+  }
+  const data = JSON.parse(raw);
+  for (let i=0;i<5;i++) {
+    if (data.conc && data.conc[i] !== null) document.getElementById("c"+i).value = data.conc[i];
+    if (data.mv && data.mv[i] !== null) document.getElementById("mv"+i).value = data.mv[i];
+  }
+  if (data.cal_temp !== null) document.getElementById("cal_temp").value = data.cal_temp;
+  document.getElementById("conditioning").checked = !!data.conditioning;
+  document.getElementById("cal_save_msg").textContent = "保存済み校正を読み込みました。";
+}
+
+function clearCalibrationInputs() {
+  for (let i=0;i<5;i++) document.getElementById("mv"+i).value = "";
+  document.getElementById("cal_save_msg").textContent = "校正mVを消去しました。";
+}
+
+function saveLog() {
+  if (!lastResult) { alert("先にCalculateしてください。"); return; }
+  const logs = JSON.parse(localStorage.getItem("no3_field_logs_v3") || "[]");
+  logs.push(lastResult);
+  localStorage.setItem("no3_field_logs_v3", JSON.stringify(logs));
+  renderLogs();
+}
+
+function renderLogs() {
+  const logs = JSON.parse(localStorage.getItem("no3_field_logs_v3") || "[]");
+  if (!logs.length) {
+    document.getElementById("log_table").innerHTML = "保存されたログはありません。";
+    return;
+  }
+  const rows = logs.slice(-10).reverse().map(x => {
+    const dt = new Date(x.timestamp).toLocaleString();
+    const gps = x.lat ? "あり" : "なし";
+    return `<tr><td>${dt}</td><td>${x.sample_id}</td><td>${x.no3_mgL.toFixed(3)}</td><td>${x.qc_level}</td><td>${gps}</td></tr>`;
+  }).join("");
+  document.getElementById("log_table").innerHTML =
+    `<table><thead><tr><th>time</th><th>ID</th><th>NO₃⁻</th><th>QC</th><th>GPS</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function exportCSV() {
+  const logs = JSON.parse(localStorage.getItem("no3_field_logs_v3") || "[]");
+  if (!logs.length) { alert("ログがありません。"); return; }
+  const headers = Object.keys(logs[0]);
+  const csv = [headers.join(",")].concat(
+    logs.map(row => headers.map(h => JSON.stringify(row[h] ?? "")).join(","))
+  ).join("\n");
+  const blob = new Blob([csv], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "no3_field_logs_with_gps.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function clearLogs() {
+  if (confirm("ログを削除しますか？")) {
+    localStorage.removeItem("no3_field_logs_v3");
+    renderLogs();
+  }
+}
+
+initCalibrationRows();
+renderLogs();
 </script>
-
-<div id="cal"></div>
-
-</div>
-
-<button onclick="calc()">Calculate</button>
-
-<div class="card">
-<div id="result" class="result">--</div>
-<div id="qc"></div>
-<div id="msg"></div>
-
-<details>
-<summary>研究用詳細</summary>
-<div id="detail"></div>
-</details>
-</div>
-
-<script>
-
-function init(){
-let html="";
-for(let i=0;i<5;i++){
-html+=`
-<label>${concDefault[i]} mg/L</label>
-<input id="mv${i}" placeholder="mV">
-`;
-}
-document.getElementById("cal").innerHTML=html;
-}
-init();
-
-function calc(){
-
-let sample_mv=parseFloat(sample_mv_input());
-
-let conc=[],mv=[];
-
-for(let i=0;i<5;i++){
-let m=parseFloat(document.getElementById("mv"+i).value);
-if(!isNaN(m)){
-conc.push(concDefault[i]);
-mv.push(m);
-}
-}
-
-if(conc.length<2){
-alert("2点以上必要");
-return;
-}
-
-let x=conc.map(c=>Math.log10(c));
-let y=mv;
-
-let n=x.length;
-
-let slope,intercept,r2="N/A";
-
-if(n===2){
-slope=(y[1]-y[0])/(x[1]-x[0]);
-intercept=y[0]-slope*x[0];
-}else{
-let mx=avg(x), my=avg(y);
-let sxy=0,sxx=0,syy=0;
-for(let i=0;i<n;i++){
-sxy+=(x[i]-mx)*(y[i]-my);
-sxx+=(x[i]-mx)*(x[i]-mx);
-syy+=(y[i]-my)*(y[i]-my);
-}
-slope=sxy/sxx;
-intercept=my-slope*mx;
-r2=(sxy*sxy)/(sxx*syy);
-}
-
-let logC=(sample_mv-intercept)/slope;
-let no3=Math.pow(10,logC);
-
-let ideal=-59.16*((parseFloat(cal_temp_input())+273.15)/298.15);
-let slopePct=Math.abs(slope/ideal)*100;
-
-let level="Good";
-let msg="安定した測定状態です。";
-
-if(n===2){
-level="注意";
-msg="2点校正のため参考値として扱ってください。";
-}
-else{
-if(r2<0.98 || slopePct<70){
-level="再測定推奨";
-msg="電極状態または校正に問題あり。再コンディショニング推奨。";
-}
-else if(r2<0.995 || slopePct<85){
-level="注意";
-msg="やや誤差が大きい可能性があります。";
-}
-}
-
-document.getElementById("result").innerHTML=no3.toFixed(2)+" mg/L";
-document.getElementById("qc").innerHTML=`QC: ${level} (points=${n})`;
-
-document.getElementById("msg").innerHTML=msg;
-
-document.getElementById("detail").innerHTML=
-`Slope: ${slope.toFixed(2)}<br>
-R²: ${r2}<br>
-Slope%: ${slopePct.toFixed(1)}%`;
-
-}
-
-function avg(a){return a.reduce((x,y)=>x+y)/a.length;}
-
-function sample_mv_input(){return document.getElementById("sample_mv").value;}
-function cal_temp_input(){return document.getElementById("cal_temp").value;}
-
-</script>
-
 </body>
 </html>
