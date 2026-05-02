@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NO3 Low Range ISE Calculator</title>
+  <style>
+    :root {
+      --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280;
+      --accent:#2563eb; --ok:#047857; --warn:#b45309; --bad:#b91c1c;
+      --border:#e5e7eb; --soft:#f3f4f6;
+    }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width:700px; margin:0 auto; padding:16px; }
+    h1 { font-size:24px; margin:8px 0 4px; }
+    .subtitle { color:var(--muted); font-size:14px; line-height:1.5; margin-bottom:14px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:14px; box-shadow:0 1px 5px rgba(0,0,0,.04); }
+    h2 { font-size:17px; margin:0 0 10px; }
+    label { display:block; font-size:13px; color:var(--muted); margin:9px 0 5px; }
+    input, select { width:100%; box-sizing:border-box; font-size:18px; padding:12px; border-radius:12px; border:1px solid var(--border); background:white; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .cal-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:end; margin-bottom:8px; }
+    button { width:100%; font-size:18px; font-weight:700; padding:14px; border:0; border-radius:14px; background:var(--accent); color:white; margin:6px 0 12px; }
+    button.secondary { background:#374151; }
+    .result { font-size:34px; font-weight:800; margin:6px 0 4px; }
+    .subresult { font-size:18px; font-weight:700; margin:0 0 10px; color:#374151; }
+    .small { font-size:14px; color:var(--muted); line-height:1.6; }
+    .badge { display:inline-block; padding:5px 9px; border-radius:999px; font-size:13px; font-weight:700; margin:4px 4px 4px 0; }
+    .ok { background:#ecfdf5; color:var(--ok); }
+    .caution { background:#fffbeb; color:var(--warn); }
+    .bad { background:#fef2f2; color:var(--bad); }
+    .warnings { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:12px; padding:10px 12px; margin-top:10px; font-size:14px; line-height:1.5; }
+    .hidden { display:none; }
+    table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+    th,td { border-bottom:1px solid var(--border); padding:8px 4px; text-align:right; }
+    th:first-child,td:first-child { text-align:left; }
+    .row-actions { display:flex; gap:8px; }
+    .row-actions button { font-size:14px; padding:10px; margin:0; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>NO₃⁻ Low Range ISE Calculator</h1>
+  <div class="subtitle">
+    森林・河川向けの低濃度レンジ用。5点校正を log-linear 回帰し、R²・スロープ・校正範囲で信頼度を表示します。
+  </div>
+
+  <div class="card">
+    <h2>サンプル</h2>
+    <div class="grid2">
+      <div>
+        <label>sample mV</label>
+        <input id="sample_mv" type="number" inputmode="decimal" placeholder="例: 110" />
+      </div>
+      <div>
+        <label>sample temp °C</label>
+        <input id="sample_temp" type="number" inputmode="decimal" value="25" />
+      </div>
+    </div>
+    <label>sample ID / メモ</label>
+    <input id="sample_id" type="text" placeholder="例: river_01" />
+  </div>
+
+  <div class="card">
+    <h2>5点校正</h2>
+    <div class="small">標準液濃度は初期値として 0.5, 1, 2, 5, 10 mg/L。必要なら変更可。0 mg/Lは対数を取れないため使いません。</div>
+    <div id="calibration_rows"></div>
+    <div class="grid2">
+      <div>
+        <label>calibration temp °C</label>
+        <input id="cal_temp" type="number" inputmode="decimal" value="25" />
+      </div>
+      <div>
+        <label>表示単位</label>
+        <select id="unit_mode">
+          <option value="NO3">NO₃⁻ mg/L</option>
+          <option value="NO3N">NO₃-N mg/L</option>
+        </select>
+      </div>
+    </div>
+    <label>
+      <input id="conditioning" type="checkbox" style="width:auto;" />
+      久しぶり使用前にコンディショニング済み
+    </label>
+  </div>
+
+  <button onclick="calculate()">Calculate</button>
+
+  <div class="card">
+    <h2>結果</h2>
+    <div id="confidence_badge"></div>
+    <div id="result_main" class="result">-- mg/L</div>
+    <div id="result_sub" class="subresult"></div>
+    <div id="details" class="small">値を入力してCalculateを押してください。</div>
+    <div id="warnings" class="warnings hidden"></div>
+    <button class="secondary" onclick="saveLog()">この測定を保存</button>
+  </div>
+
+  <div class="card">
+    <h2>測定ログ</h2>
+    <div class="row-actions">
+      <button class="secondary" onclick="exportCSV()">CSV Export</button>
+      <button class="secondary" onclick="clearLogs()">ログ削除</button>
+    </div>
+    <div id="log_table" class="small"></div>
+  </div>
+</div>
+
+<script>
+const defaultConcs = [0.5, 1, 2, 5, 10];
+let lastResult = null;
+
+function initCalibrationRows() {
+  const box = document.getElementById("calibration_rows");
+  box.innerHTML = "";
+  defaultConcs.forEach((c, i) => {
+    box.innerHTML += `
+      <div class="cal-row">
+        <div>
+          <label>standard ${i+1} conc. mg/L</label>
+          <input id="c${i}" type="number" inputmode="decimal" value="${c}" />
+        </div>
+        <div>
+          <label>standard ${i+1} mV</label>
+          <input id="mv${i}" type="number" inputmode="decimal" placeholder="mV" />
+        </div>
+      </div>`;
+  });
+}
+function num(id) {
+  const v = parseFloat(document.getElementById(id).value);
+  return Number.isFinite(v) ? v : null;
+}
+function mean(arr){ return arr.reduce((a,b)=>a+b,0)/arr.length; }
+
+function linearRegression(x, y) {
+  const mx = mean(x), my = mean(y);
+  let sxx=0, sxy=0, sst=0, sse=0;
+  for (let i=0;i<x.length;i++){ sxx += (x[i]-mx)*(x[i]-mx); sxy += (x[i]-mx)*(y[i]-my); }
+  const slope = sxy / sxx;
+  const intercept = my - slope * mx;
+  for (let i=0;i<x.length;i++){
+    const pred = slope*x[i]+intercept;
+    sst += (y[i]-my)*(y[i]-my);
+    sse += (y[i]-pred)*(y[i]-pred);
+  }
+  const r2 = sst === 0 ? NaN : 1 - sse/sst;
+  return {slope, intercept, r2};
+}
+
+function calculate() {
+  const sample_mv = num("sample_mv");
+  const sample_temp = num("sample_temp");
+  const cal_temp = num("cal_temp");
+  const conditioning = document.getElementById("conditioning").checked;
+  const unitMode = document.getElementById("unit_mode").value;
+
+  if ([sample_mv, sample_temp, cal_temp].some(v => v === null)) {
+    alert("サンプルmV、温度、校正温度を入力してください。");
+    return;
+  }
+
+  const conc = [], mv = [];
+  for (let i=0;i<5;i++) {
+    const c = num("c"+i);
+    const m = num("mv"+i);
+    if (c === null || m === null || c <= 0) {
+      alert("5点すべての標準液濃度とmVを入力してください。濃度0は使えません。");
+      return;
+    }
+    conc.push(c);
+    mv.push(m);
+  }
+
+  const x = conc.map(c => Math.log10(c));
+  const y = mv;
+  const fit = linearRegression(x, y);
+
+  const logC = (sample_mv - fit.intercept) / fit.slope;
+  const no3 = Math.pow(10, logC);
+  const no3n = no3 / 4.4268;
+
+  const minC = Math.min(...conc);
+  const maxC = Math.max(...conc);
+  const ideal = -59.16 * ((cal_temp + 273.15) / 298.15);
+  const slopePercent = Math.abs(fit.slope / ideal) * 100;
+  const tempDiff = Math.abs(sample_temp - cal_temp);
+
+  const warnings = [];
+  let confidence = "Good";
+  let confidenceClass = "ok";
+
+  if (fit.r2 < 0.95 || slopePercent < 75 || slopePercent > 125) {
+    confidence = "Recalibration recommended";
+    confidenceClass = "bad";
+  } else if (fit.r2 < 0.98 || slopePercent < 85 || slopePercent > 115 || tempDiff > 2 || no3 < minC*1.2) {
+    confidence = "Caution";
+    confidenceClass = "caution";
+  }
+
+  if (fit.r2 < 0.995) warnings.push(`R² = ${fit.r2.toFixed(4)}。研究用途では校正直線性に注意してください。`);
+  if (slopePercent < 85 || slopePercent > 115) warnings.push(`スロープが理論値の85–115%外です（${slopePercent.toFixed(1)}%）。`);
+  if (tempDiff > 2) warnings.push(`校正温度と測定温度の差が2°C超です（${tempDiff.toFixed(1)}°C）。`);
+  if (!conditioning) warnings.push("久しぶりに使う場合は、高濃度標準液でのコンディショニング推奨です。");
+  if (no3 < minC) warnings.push(`校正下限未満です。数値ではなく「< ${minC} mg/L」として扱うのが安全です。`);
+  if (no3 > maxC) warnings.push(`校正上限を超えています。希釈または高濃度側の校正点追加を検討してください。`);
+
+  const shownMain = unitMode === "NO3" ? no3 : no3n;
+  const shownSub = unitMode === "NO3" ? `NO₃-N: ${no3n.toFixed(3)} mg/L` : `NO₃⁻: ${no3.toFixed(3)} mg/L`;
+  let mainText;
+  if (no3 < minC && unitMode === "NO3") mainText = `< ${minC} mg/L`;
+  else if (no3 < minC && unitMode === "NO3N") mainText = `< ${(minC/4.4268).toFixed(3)} mg/L`;
+  else mainText = shownMain.toFixed(3) + " mg/L";
+
+  document.getElementById("confidence_badge").innerHTML = `<span class="badge ${confidenceClass}">${confidence}</span>`;
+  document.getElementById("result_main").textContent = mainText;
+  document.getElementById("result_sub").textContent = shownSub;
+  document.getElementById("details").innerHTML =
+    `Model: mV = ${fit.slope.toFixed(2)} × log10(C) + ${fit.intercept.toFixed(2)}<br>` +
+    `R²: ${fit.r2.toFixed(4)}<br>` +
+    `Slope: ${fit.slope.toFixed(2)} mV/decade (${slopePercent.toFixed(1)}% of ideal)<br>` +
+    `Calibration range: ${minC}–${maxC} mg/L as NO₃⁻`;
+
+  const wbox = document.getElementById("warnings");
+  if (warnings.length) {
+    wbox.classList.remove("hidden");
+    wbox.innerHTML = warnings.map(w => "⚠️ " + w).join("<br>");
+  } else {
+    wbox.classList.add("hidden");
+    wbox.innerHTML = "";
+  }
+
+  lastResult = {
+    timestamp: new Date().toISOString(),
+    sample_id: document.getElementById("sample_id").value || "",
+    sample_mv, sample_temp, cal_temp,
+    no3_mgL: no3,
+    no3n_mgL: no3n,
+    slope: fit.slope,
+    intercept: fit.intercept,
+    r2: fit.r2,
+    slope_percent_ideal: slopePercent,
+    confidence
+  };
+}
+
+function saveLog() {
+  if (!lastResult) { alert("先にCalculateしてください。"); return; }
+  const logs = JSON.parse(localStorage.getItem("no3_low_logs") || "[]");
+  logs.push(lastResult);
+  localStorage.setItem("no3_low_logs", JSON.stringify(logs));
+  renderLogs();
+}
+
+function renderLogs() {
+  const logs = JSON.parse(localStorage.getItem("no3_low_logs") || "[]");
+  if (!logs.length) {
+    document.getElementById("log_table").innerHTML = "保存されたログはありません。";
+    return;
+  }
+  const rows = logs.slice(-10).reverse().map(x => {
+    const dt = new Date(x.timestamp).toLocaleString();
+    return `<tr><td>${dt}</td><td>${x.sample_id}</td><td>${x.no3_mgL.toFixed(3)}</td><td>${x.r2.toFixed(4)}</td><td>${x.confidence}</td></tr>`;
+  }).join("");
+  document.getElementById("log_table").innerHTML =
+    `<table><thead><tr><th>time</th><th>ID</th><th>NO₃⁻</th><th>R²</th><th>QC</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function exportCSV() {
+  const logs = JSON.parse(localStorage.getItem("no3_low_logs") || "[]");
+  if (!logs.length) { alert("ログがありません。"); return; }
+  const headers = Object.keys(logs[0]);
+  const csv = [headers.join(",")].concat(
+    logs.map(row => headers.map(h => JSON.stringify(row[h] ?? "")).join(","))
+  ).join("\n");
+  const blob = new Blob([csv], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "no3_low_range_logs.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function clearLogs() {
+  if (confirm("ログを削除しますか？")) {
+    localStorage.removeItem("no3_low_logs");
+    renderLogs();
+  }
+}
+
+initCalibrationRows();
+renderLogs();
+</script>
+</body>
+</html>
